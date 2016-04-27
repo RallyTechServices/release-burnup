@@ -69,8 +69,8 @@ Ext.define("release-burnup", {
         cb.on('select',this._updateBurnup, this);
         this.onScopeChange();
     },
-    getUsePoints: function(){
-        return this.down('#cbUnit') && this.down('#cbUnit').getValue() === 'Points';
+    getUnit: function(){
+        return this.down('#cbUnit') && this.down('#cbUnit').getValue() || this.chartUnits[0];
     },
     getTimeboxStartDate: function(){
         var record = this.getTimeboxRecord();
@@ -158,7 +158,7 @@ Ext.define("release-burnup", {
         Rally.ui.notify.Notifier.showError({message: msg});
     },
     _updateBurnup: function(){
-        this.logger.log('_updateBurnup', this.getUsePoints());
+        this.logger.log('_updateBurnup', this.getUnit());
 
         if (!this.timeboxes || this.timeboxes.length === 0){
             this._showMissingCriteria();
@@ -169,11 +169,12 @@ Ext.define("release-burnup", {
 
         this.down('#displayBox').add({
             xtype: 'rallychart',
+            chartColors: ['#8DC63F','#1E7C00','#7CAFD7','#ffb533','#666','#005EB8'],
             storeType: 'Rally.data.lookback.SnapshotStore',
             storeConfig: this._getStoreConfig(),
             calculatorType: 'Rally.technicalservices.ReleaseBurnupCalculator',
             calculatorConfig: {
-                usePoints: this.getUsePoints(),
+                usePoints: this.getUnit() === 'Points',
                 completedScheduleStateNames: this.completedStates,
                 startDate: this.getTimeboxStartDate(),
                 endDate: this.getTimeboxEndDate(),
@@ -242,7 +243,13 @@ Ext.define("release-burnup", {
                 zoomType: 'xy'
             },
             title: {
-                text: 'Release Burnup'
+                text: this.getTimeboxRecord() && this.getTimeboxRecord().get('Name') || "No Release",
+                style: {
+                    color: '#666',
+                    fontSize: '18px',
+                    fontFamily: 'ProximaNova',
+                    fill: '#666'
+                }
             },
             xAxis: {
                 categories: [],
@@ -250,16 +257,52 @@ Ext.define("release-burnup", {
                 tickInterval: 5,
                 title: {
                     text: 'Date',
-                    margin: 10
+                    margin: 10,
+                    style: {
+                        color: '#444',
+                        fontFamily:'ProximaNova',
+                        textTransform: 'uppercase',
+                        fill:'#444'
+                    }
+                },
+                labels: {
+                    style: {
+                        color: '#444',
+                        fontFamily:'ProximaNova',
+                        textTransform: 'uppercase',
+                        fill:'#444'
+                    }
                 }
             },
             yAxis: [
                 {
                     title: {
-                        text: 'Points'
+                        text: this.getUnit(),
+                        style: {
+                            color: '#444',
+                            fontFamily:'ProximaNova',
+                            textTransform: 'uppercase',
+                            fill:'#444'
+                        }
+                    },
+                    labels: {
+                        style: {
+                            color: '#444',
+                            fontFamily:'ProximaNova',
+                            textTransform: 'uppercase',
+                            fill:'#444'
+                        }
                     }
                 }
             ],
+            legend: {
+                itemStyle: {
+                        color: '#444',
+                        fontFamily:'ProximaNova',
+                        textTransform: 'uppercase'
+                },
+                borderWidth: 0
+            },
             tooltip: {
                 formatter: function() {
                     return '' + this.x + '<br />' + this.series.name + ': ' + this.y;
