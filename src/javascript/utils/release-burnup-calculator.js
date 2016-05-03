@@ -12,19 +12,19 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
 
     getDerivedFieldsOnInput: function() {
         var completedScheduleStateNames = this.getCompletedScheduleStateNames(),
-            usePoints = this.usePoints,
-            preliminaryEstimateValues = this.preliminaryEstimateValueHashByObjectID;
+            usePoints = this.usePoints;
+            //preliminaryEstimateValues = this.preliminaryEstimateValueHashByObjectID;
 
         var fields = [
             {
-               "as": "PreliminaryEstimate",
-                "f": function(snapshot){
-                    if (snapshot.PreliminaryEstimate){
-                        return preliminaryEstimateValues[snapshot.PreliminaryEstimate] || 0;
-                    }
-                    return 0;
-                }
-            },{
+            //   "as": "PreliminaryEstimate",
+            //    "f": function(snapshot){
+            //        if (snapshot.PreliminaryEstimate){
+            //            return preliminaryEstimateValues[snapshot.PreliminaryEstimate] || 0;
+            //        }
+            //        return 0;
+            //    }
+            //},{
                 "as": "Planned",
                 "f": function(snapshot) {
                     if (snapshot.ScheduleState){ //We've added this to weed out the portfolio items for the count
@@ -75,11 +75,11 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
             "as": "Planned",
             "display": "line",
             "f": "sum"
-        },{
-            "field": "PreliminaryEstimate",
-            "as": "PreliminaryEstimate",
-            "display": "line",
-            "f": "sum"
+        //},{
+        //    "field": "PreliminaryEstimate",
+        //    "as": "PreliminaryEstimate",
+        //    "display": "line",
+        //    "f": "sum"
         }]);
 
         return metrics;
@@ -135,13 +135,17 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
     getSummaryMetricsConfig: function () {
         var me = this,
             completedScheduleStates = this.completedScheduleStateNames;
+        if (!this.showPredictionLines){
+            return [];
+        }
+
         return [{
-                  "as": "planned_slope",
-                  "f": function(seriesData, metrics) {
-                      var summedData = me._getSummedData(seriesData, "Planned");
-                      return me._getSlope(summedData);
-                  }
-              },{
+            "as": "planned_slope",
+            "f": function(seriesData, metrics) {
+              var summedData = me._getSummedData(seriesData, "Planned");
+              return me._getSlope(summedData);
+            }
+        },{
             "as": "planned_intercept",
             "f": function(seriesData, metrics) {
                 var summedData = me._getSummedData(seriesData, "Planned");
@@ -162,17 +166,24 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
         }];
     },
     getDerivedFieldsAfterSummary: function () {
+
+        if (!this.showPredictionLines){
+            return [];
+        }
+
         return [{
                  "as": "Prediction (Planned Points)",
                  "f": function(snapshot, index, metrics, seriesData) {
-                      return metrics.planned_intercept + metrics.planned_slope * index;
+                      return Math.round(metrics.planned_intercept + metrics.planned_slope * index);
+
                   },
                   "display": "line",
                   "dashStyle": "ShortDash"
              },{
             "as": "Prediction (Accepted Points)",
             "f": function(snapshot, index, metrics, seriesData) {
-                return metrics.accepted_intercept + metrics.accepted_slope * index;
+                return Math.round(metrics.accepted_intercept + metrics.accepted_slope * index);
+
             },
             "display": "line",
             "dashStyle": "ShortDash"
@@ -193,51 +204,6 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
                 }
             });
         });
-        console.log('snapshots',snapshots);
-
         return this.runCalculation(snapshots);
-    },
-    _getTrendline: function(series){
-        /**
-         * Regression Equation(y) = a + bx
-         * Slope(b) = (NΣXY - (ΣX)(ΣY)) / (NΣX2 - (ΣX)2)
-         * Intercept(a) = (ΣY - b(ΣX)) / N
-         */
-
-        var sum_xy = 0;
-        var sum_x = 0;
-        var sum_y = 0;
-        var sum_x_squared = 0;
-        var n = 0;
-        for (var i=0; i<series.data.length; i++){
-            if (series.data[i].y){
-                sum_xy += series.data[i].y * i;
-                sum_x += i;
-                sum_y += series.data[i].y;
-                sum_x_squared += i * i;
-                n++;
-            }
-        }
-        var slope = (n*sum_xy - sum_x * sum_y)/(n*sum_x_squared - sum_x * sum_x);
-        var intercept = (sum_y - slope * sum_x)/n;
-
-        this.logger.log('trendline data (name, slope, intercept)',series.name, slope, intercept);
-
-        var y = [];
-        if (!isNaN(slope) && !isNaN(intercept)){
-            y = _.range(series.data.length).map(function () {return null})
-            for (var i =0; i<series.data.length; i++){
-                y[i] = intercept + slope * i;
-            }
-        }
-        this.logger.log('_getTrendline', y);
-        return {
-            name: series.name + ' Trendline',
-            color: series.color,
-            data: y,
-            display: 'line',
-            dashStyle: 'LongDash'
-        };
-
     }
 });

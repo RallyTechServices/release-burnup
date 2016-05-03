@@ -1,5 +1,27 @@
 #Release Burnup
 
+![ScreenShot](/images/release-burnup.png)
+
+By default, the chart burns up all points or counts from all user stories and defects within the current project scope that meet one of the following criteria:
+
+(1) Are descendants of ANY lowest level portfolio item CURRENTLY associated with the selected Release (note that the Portfolio Item may be outside of the current project scope.  Stories associated with that Portfolio Items outside of the current project scope will be included IF they are within the currently selected project scope).  
+(2) Are directly associated with the release
+(3) Defects not directly associated with the release will be included if they are associated with a User Story that falls within the dataset for (1) or (2).  
+
+Only leaf stories (stories with no children) or defects are included in the dataset.  
+
+This app can respond to a Release scoped Dashboard.  If the dashboard is timebox scoped (but not Release) or does not have a timebox scope, then a Release dropdown will be added to the app automatically.  
+
+####App settings for this release include:
+(1) Show Defects (default: true):  When unchecked, then no defects will be included in the burnup calculations on the chart.  
+(2) Show Prediction Lines (default: true):  When unchecked, no prediction lines for Planned or Accepted points will be calculated or shown on the chart.  
+
+This chart uses the lookback API to retrieve historical data for the user stories and defects.  
+
+When retrieving user stories for the Portfolio Items associated with the release, the app will only look for user stories associated with the Portfolio Items that are in the release as of today.
+If a portfolio Item was removed from the release yesterday, then any stories associated with that Portfolio Item not associated directly with the release will not be included in the historical dataset.  
+  
+
 ## Development Notes
 
 ### First Load

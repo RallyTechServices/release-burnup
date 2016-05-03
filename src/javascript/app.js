@@ -12,6 +12,13 @@ Ext.define("release-burnup", {
         name : "ts-release-burnup"
     },
 
+    config: {
+        defaultSettings: {
+            showPredictionLines: false,
+            showDefects: true
+        }
+    },
+
     chartUnits: ['Points','Count'],  //Default is first in the list
     portfolioItemTypes: ['PortfolioItem/Feature'],
     completedStates: ['Accepted', 'Released'],
@@ -26,8 +33,8 @@ Ext.define("release-burnup", {
 
         Deft.Promise.all([
             Rally.technicalservices.Toolbox.fetchPortfolioItemTypes(),
-            Rally.technicalservices.Toolbox.fetchScheduleStates(),
-            Rally.technicalservices.Toolbox.fetchPreliminaryEstimateValues()
+            Rally.technicalservices.Toolbox.fetchScheduleStates()
+        //    Rally.technicalservices.Toolbox.fetchPreliminaryEstimateValues()
         ]).then({
             success: this._initializeApp,
             failure: this._showError,
@@ -59,7 +66,7 @@ Ext.define("release-burnup", {
             var rcb = headerBox.add({
                 xtype: this.timeboxTypePicker
             });
-            rcb.on('select', this.onScopeChange, this);
+            rcb.on('select', this.updateTimebox, this);
         }
         var cb = headerBox.add({
             xtype: 'tscustomcombobox',
@@ -67,7 +74,7 @@ Ext.define("release-burnup", {
             allowedValues: this.chartUnits
         });
         cb.on('select',this._updateBurnup, this);
-        this.onScopeChange();
+        this.updateTimebox();
     },
     getUnit: function(){
         return this.down('#cbUnit') && this.down('#cbUnit').getValue() || this.chartUnits[0];
@@ -112,9 +119,9 @@ Ext.define("release-burnup", {
         }
         return [];
     },
-    onScopeChange: function(){
+    updateTimebox: function(){
         var timeboxFilter = this.getTimeboxFilter();
-        this.logger.log('onScopeChange', timeboxFilter.toString());
+        this.logger.log('updateTimebox', timeboxFilter.toString());
 
         this.releases = [];
         this.portfolioItems = [];
@@ -123,7 +130,7 @@ Ext.define("release-burnup", {
             this._showMissingCriteria();
             return;
         }
-
+        this.setLoading(true);
         var promises = [Rally.technicalservices.Toolbox.fetchData({
             model: Ext.String.capitalize(this.timeboxType),
             fetch: ['ObjectID'],
@@ -131,18 +138,31 @@ Ext.define("release-burnup", {
         }), Rally.technicalservices.Toolbox.fetchData({
             model: this.portfolioItemTypes[0],
             fetch: ['ObjectID','PreliminaryEstimate','Value'],
+            context: {project: null},
             filters: timeboxFilter
         })];
 
+        var me = this;
         Deft.Promise.all(promises).then({
+
             success: function(results){
+                this.logger.log('updateTimebox Results', results);
                 this.timeboxes = results[0];
                 this.portfolioItems = results[1];
                 this._updateBurnup();
             },
             failure: this._showError,
             scope: this
+        }).always(function(){
+            me.setLoading(false);
         });
+    },
+    onTimeboxScopeChange: function(timeboxScope){
+        this.logger.log('onTimeboxScopeChange',timeboxScope);
+        if (timeboxScope && timeboxScope.type === this.timeboxType){
+            this.getContext().setTimeboxScope(timeboxScope);
+            this.updateTimebox();
+        }
     },
     _getFieldValueArray: function(records, fieldName){
         return _.map(records || [], function(r){ return r.get(fieldName); });
@@ -169,7 +189,7 @@ Ext.define("release-burnup", {
 
         this.down('#displayBox').add({
             xtype: 'rallychart',
-            chartColors: ['#8DC63F','#1E7C00','#7CAFD7','#ffb533','#666','#005EB8'],
+            chartColors: ['#8DC63F','#1E7C00','#7CAFD7','#666','#005EB8'],
             storeType: 'Rally.data.lookback.SnapshotStore',
             storeConfig: this._getStoreConfig(),
             calculatorType: 'Rally.technicalservices.ReleaseBurnupCalculator',
@@ -178,34 +198,34 @@ Ext.define("release-burnup", {
                 completedScheduleStateNames: this.completedStates,
                 startDate: this.getTimeboxStartDate(),
                 endDate: this.getTimeboxEndDate(),
-                preliminaryEstimateValueHashByObjectID: this.preliminaryEstimateValueHashByObjectID
+                showPredictionLines: this.getShowPredictionLines()
+                //preliminaryEstimateValueHashByObjectID: this.preliminaryEstimateValueHashByObjectID
             },
             chartConfig: this._getChartConfig()
         });
     },
+    getShowPredictionLines: function(){
+        return this.getSetting('showPredictionLines') === 'true' || this.getSetting('showPredictionLines') === true;
+    },
+    getShowDefects: function(){
+        return this.getSetting('showDefects') === 'true' || this.getSetting('showDefects') === true ;
+    },
     _getStoreConfig: function(){
 
         var rOids = this._getFieldValueArray(this.timeboxes,'ObjectID'),
-            piOids = this._getFieldValueArray(this.portfolioItems,'ObjectID');
+            piOids = this._getFieldValueArray(this.portfolioItems,'ObjectID'),
+            projectOid = this.getContext().getProject().ObjectID;
+
+        var typeHierarchy = ['HierarchicalRequirement'];
+        if (this.getShowDefects()){
+            typeHierarchy.push('Defect');
+        }
 
         var configs = [{
             find: {
-                _TypeHierarchy: "PortfolioItem/Feature",
-                Release: {$in: rOids}
-            },
-            fetch: ['PreliminaryEstimate','_id'],
-            hydrate: ['PreliminaryEstimate'],
-            removeUnauthorizedSnapshots: true,
-            sort: {
-                _ValidFrom: 1
-            },
-            context: this.getContext().getDataContext(),
-            limit: Infinity
-        },{
-            find: {
-                _TypeHierarchy: {$in: ['HierarchicalRequirement','Defect']},
+                _TypeHierarchy: {$in: typeHierarchy},
                 Children: null,
-                Release: {$in: rOids}
+                Release: {$in: rOids} //We don't need project hierarchy here because the releases are associated with the current project hierarchy.
             },
             fetch: ['ScheduleState', 'PlanEstimate','_id'],
             hydrate: ['ScheduleState'],
@@ -220,9 +240,10 @@ Ext.define("release-burnup", {
         if (piOids && piOids.length > 0){
             configs.push({
                 find: {
-                        _TypeHierarchy: {$in: ['HierarchicalRequirement','Defect']},
+                        _TypeHierarchy: {$in: typeHierarchy},
                         Children: null,
-                        _ItemHierarchy: {$in: piOids}
+                        _ItemHierarchy: {$in: piOids},
+                        _ProjectHierarchy: projectOid // We need project hierarchy here to limit the stories and defects to just those in this project.
                 },
                 fetch: ['ScheduleState', 'PlanEstimate','_id'],
                 hydrate: ['ScheduleState'],
@@ -255,6 +276,8 @@ Ext.define("release-burnup", {
                 categories: [],
                 tickmarkPlacement: 'on',
                 tickInterval: 5,
+
+
                 title: {
                     text: 'Date',
                     margin: 10,
@@ -304,9 +327,13 @@ Ext.define("release-burnup", {
                 borderWidth: 0
             },
             tooltip: {
-                formatter: function() {
-                    return '' + this.x + '<br />' + this.series.name + ': ' + this.y;
-                }
+                backgroundColor: '#444',
+                headerFormat: '<span style="display:block;margin:0;padding:0 0 2px 0;text-align:center"><b style="font-family:NotoSansBold;color:white;">{point.key}</b></span><table><tbody>',
+                footerFormat: '</tbody></table>',
+                pointFormat: '<tr><td class="tooltip-label"><span style="color:{series.color};width=100px;">\u25CF</span> {series.name}</td><td class="tooltip-point">{point.y}</td></tr>',
+                shared: true,
+                useHTML: true,
+                borderColor: '#444'
             },
             plotOptions: {
                 series: {
@@ -336,7 +363,23 @@ Ext.define("release-burnup", {
             }
         ];
     },
-    
+    getSettingsFields: function(){
+        var labelWidth = 200;
+
+        return [{
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Show Prediction Lines',
+            labelAlign: 'right',
+            labelWidth: labelWidth,
+            name: 'showPredictionLines'
+        },{
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Show Defects',
+            labelAlign: 'right',
+            labelWidth: labelWidth,
+            name: 'showDefects'
+        }];
+    },
     _launchInfo: function() {
         if ( this.about_dialog ) { this.about_dialog.destroy(); }
         this.about_dialog = Ext.create('Rally.technicalservices.InfoLink',{});
