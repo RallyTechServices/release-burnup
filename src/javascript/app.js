@@ -15,7 +15,8 @@ Ext.define("release-burnup", {
     config: {
         defaultSettings: {
             showPredictionLines: false,
-            showDefects: true
+            showDefects: true,
+            showStories: true
         }
     },
 
@@ -210,15 +211,29 @@ Ext.define("release-burnup", {
     getShowDefects: function(){
         return this.getSetting('showDefects') === 'true' || this.getSetting('showDefects') === true ;
     },
+    getShowStories: function(){
+        var showStories = this.getSetting('showStories') === 'true' || this.getSetting('showStories') === true ;
+        if (!this.getShowDefects()){
+            return true;
+        }
+        return showStories;
+
+    },
     _getStoreConfig: function(){
 
         var rOids = this._getFieldValueArray(this.timeboxes,'ObjectID'),
             piOids = this._getFieldValueArray(this.portfolioItems,'ObjectID'),
             projectOid = this.getContext().getProject().ObjectID;
 
-        var typeHierarchy = ['HierarchicalRequirement'];
+        var typeHierarchy = [];
+        if (this.getShowStories()){
+            typeHierarchy.push('HierarchicalRequirement');
+        }
         if (this.getShowDefects()){
             typeHierarchy.push('Defect');
+        }
+        if (typeHierarchy.length === 0){
+            typeHierarchy = ['HierarchicalRequirement'];
         }
 
         var configs = [{
@@ -378,6 +393,12 @@ Ext.define("release-burnup", {
             labelAlign: 'right',
             labelWidth: labelWidth,
             name: 'showDefects'
+        },{
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Show User Stories',
+            labelAlign: 'right',
+            labelWidth: labelWidth,
+            name: 'showStories'
         }];
     },
     _launchInfo: function() {

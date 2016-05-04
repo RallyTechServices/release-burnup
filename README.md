@@ -15,6 +15,7 @@ This app can respond to a Release scoped Dashboard.  If the dashboard is timebox
 ####App settings for this release include:
 (1) Show Defects (default: true):  When unchecked, then no defects will be included in the burnup calculations on the chart.  
 (2) Show Prediction Lines (default: true):  When unchecked, no prediction lines for Planned or Accepted points will be calculated or shown on the chart.  
+(3) Show User Stories (default: true):  When unchecked, will only show defects.  Note that if both "Show Defects and Show User Stories" settings are unchecked, the chart will ignore this setting and default to showing User STories only.
 
 This chart uses the lookback API to retrieve historical data for the user stories and defects.  
 
