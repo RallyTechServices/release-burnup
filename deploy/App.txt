@@ -3,12 +3,12 @@
 <head>
     <title>Release Burnup</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Tue May 03 2016 11:41:16 GMT-0600 (MDT) -->
+    <!--  Build Date: Tue May 03 2016 18:08:38 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Tue May 03 2016 11:41:16 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Tue May 03 2016 18:08:38 GMT-0600 (MDT)";
         var BUILDER = "kcorkan";
-        var CHECKSUM = 17835604564;
+        var CHECKSUM = 18647225553;
     </script>
     
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
@@ -551,7 +551,8 @@ Ext.define("release-burnup", {
     config: {
         defaultSettings: {
             showPredictionLines: false,
-            showDefects: true
+            showDefects: true,
+            showStories: true
         }
     },
 
@@ -746,15 +747,29 @@ Ext.define("release-burnup", {
     getShowDefects: function(){
         return this.getSetting('showDefects') === 'true' || this.getSetting('showDefects') === true ;
     },
+    getShowStories: function(){
+        var showStories = this.getSetting('showStories') === 'true' || this.getSetting('showStories') === true ;
+        if (!this.getShowDefects()){
+            return true;
+        }
+        return showStories;
+
+    },
     _getStoreConfig: function(){
 
         var rOids = this._getFieldValueArray(this.timeboxes,'ObjectID'),
             piOids = this._getFieldValueArray(this.portfolioItems,'ObjectID'),
             projectOid = this.getContext().getProject().ObjectID;
 
-        var typeHierarchy = ['HierarchicalRequirement'];
+        var typeHierarchy = [];
+        if (this.getShowStories()){
+            typeHierarchy.push('HierarchicalRequirement');
+        }
         if (this.getShowDefects()){
             typeHierarchy.push('Defect');
+        }
+        if (typeHierarchy.length === 0){
+            typeHierarchy = ['HierarchicalRequirement'];
         }
 
         var configs = [{
@@ -914,6 +929,12 @@ Ext.define("release-burnup", {
             labelAlign: 'right',
             labelWidth: labelWidth,
             name: 'showDefects'
+        },{
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Show User Stories',
+            labelAlign: 'right',
+            labelWidth: labelWidth,
+            name: 'showStories'
         }];
     },
     _launchInfo: function() {
