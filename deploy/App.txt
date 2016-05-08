@@ -3,12 +3,12 @@
 <head>
     <title>Release Burnup</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Tue May 03 2016 18:08:38 GMT-0600 (MDT) -->
+    <!--  Build Date: Sun May 08 2016 08:45:09 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Tue May 03 2016 18:08:38 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Sun May 08 2016 08:45:09 GMT-0600 (MDT)";
         var BUILDER = "kcorkan";
-        var CHECKSUM = 18647225553;
+        var CHECKSUM = 23666146959;
     </script>
     
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
@@ -237,29 +237,31 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
     extend: 'Rally.data.lookback.calculator.TimeSeriesCalculator',
     config: {
         completedScheduleStateNames: ['Accepted'],
-        usePoints: true
+        usePoints: true,
+        plannedPredictionLineName: "Prediction (Planned Points)",
+        acceptedPredictionLineName: "Prediction (Accepted Points)"
     },
 
     constructor: function(config) {
         this.initConfig(config);
         this.callParent(arguments);
     },
-
+    _getTypes: function(){
+        var typeHierarchy = [];
+        if (this.showStories){
+            typeHierarchy.push('HierarchicalRequirement');
+        }
+        if (this.showDefects){
+            typeHierarchy.push('Defect');
+        }
+        return typeHierarchy;
+    },
     getDerivedFieldsOnInput: function() {
         var completedScheduleStateNames = this.getCompletedScheduleStateNames(),
             usePoints = this.usePoints;
-            //preliminaryEstimateValues = this.preliminaryEstimateValueHashByObjectID;
 
         var fields = [
             {
-            //   "as": "PreliminaryEstimate",
-            //    "f": function(snapshot){
-            //        if (snapshot.PreliminaryEstimate){
-            //            return preliminaryEstimateValues[snapshot.PreliminaryEstimate] || 0;
-            //        }
-            //        return 0;
-            //    }
-            //},{
                 "as": "Planned",
                 "f": function(snapshot) {
                     if (snapshot.ScheduleState){ //We've added this to weed out the portfolio items for the count
@@ -273,35 +275,61 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
                 }
             }];
 
+        var typeHierarchy = this._getTypes();
+
         Ext.Array.each(completedScheduleStateNames, function(ss){
-            fields.push({
-                "as": ss,
-                "f": function(snapshot) {
-                    if (snapshot.ScheduleState === ss) {
-                        if (usePoints){
-                            return snapshot.PlanEstimate || 0;
-                        } else {
-                            return 1;
+            Ext.Array.each(typeHierarchy, function(t){
+                fields.push({
+                    "as": ss + t,
+                    "f": function(snapshot) {
+                        if (Ext.Array.contains(snapshot._TypeHierarchy, t) && snapshot.ScheduleState === ss) {
+                            if (usePoints){
+                                return snapshot.PlanEstimate || 0;
+                            } else {
+                                return 1;
+                            }
                         }
+                        return 0;
                     }
-                    return 0;
-                }
+                });
             });
         });
 
         return fields;
     },
+    _getColors: function(completedStateNames){
+        var colors = {};
 
+        colors["AcceptedHierarchicalRequirement"] = "#8DC63F";
+        colors["AcceptedDefect"] = "#FBB990";
+
+        if (completedStateNames.length > 1){
+            colors[completedStateNames[1]+"HierarchicalRequirement"] = "#1E7C00" ;
+            colors[completedStateNames[1]+"Defect"] = "#FF8200";
+        }
+
+        colors["Planned"] =  "#7CAFD7";
+        colors[this.plannedPredictionLineName] = "#666";
+        colors[this.acceptedPredictionLineName] = "#005EB8";
+
+        return colors;
+    },
     getMetrics: function() {
         var completedScheduleStateNames = this.getCompletedScheduleStateNames(),
-            metrics = [];
+            metrics = [],
+            typeHierarchy = this._getTypes(),
+            colors = this._getColors(completedScheduleStateNames);
 
         Ext.Array.each(completedScheduleStateNames, function(ss){
-            metrics.push({
-                "field": ss,
-                "as": ss,
-                "f": "sum",
-                "display": "column"
+            Ext.Array.each(typeHierarchy, function(t){
+                var fieldDisplayName = Ext.String.format("{0} ({1})",ss,t.replace('HierarchicalRequirement','User Story'));
+                metrics.push({
+                    "field": ss + t,
+                    "as": fieldDisplayName,
+                    "f": "sum",
+                    "display": "column",
+                    "color": colors[ss+t]
+                });
             });
         });
 
@@ -309,22 +337,16 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
             "field": "Planned",
             "as": "Planned",
             "display": "line",
-            "f": "sum"
-        //},{
-        //    "field": "PreliminaryEstimate",
-        //    "as": "PreliminaryEstimate",
-        //    "display": "line",
-        //    "f": "sum"
+            "f": "sum",
+            "color": colors.Planned
         }]);
 
         return metrics;
     },
-    _getSummedData: function(seriesData, metricNames){
-
+    _getSummedData: function(seriesData, metricNames, types){
         if (!Ext.isArray(metricNames)){
             metricNames = [metricNames];
         }
-
         var sum_xy = 0;
         var sum_x = 0;
         var sum_y = 0;
@@ -332,8 +354,12 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
         var n = 0;
         for (var i=0; i<seriesData.length; i++){
             var val = 0;
+
             Ext.Array.each(metricNames, function(m){
-                val += (seriesData[i][m] || 0);
+                Ext.Array.each(types, function(t){
+                    var fieldDisplayName = Ext.String.format("{0} ({1})",m,t.replace('HierarchicalRequirement','User Story'));
+                    val += (seriesData[i][fieldDisplayName] || 0);
+                });
             });
 
             if (val){
@@ -353,7 +379,6 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
         };
     },
     _getSlope: function(summedData){
-
         if ((summedData.n * summedData.sumXSquared - summedData.sumX * summedData.sumX) !== 0){
             return (summedData.n*summedData.sumXY - summedData.sumX * summedData.sumY)/(summedData.n*summedData.sumXSquared - summedData.sumX * summedData.sumX);
         }
@@ -364,65 +389,77 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
         if (summedData.n === 0){
             return 0;
         }
-
         return (summedData.sumY - slope * summedData.sumX)/summedData.n;
     },
     getSummaryMetricsConfig: function () {
         var me = this,
-            completedScheduleStates = this.completedScheduleStateNames;
-        if (!this.showPredictionLines){
-            return [];
+            completedScheduleStates = this.completedScheduleStateNames,
+            summaryMetrics = [],
+            types = this._getTypes();
+
+        if (this.showPlannedPredictionLine){
+            summaryMetrics = summaryMetrics.concat({
+                "as": "planned_slope",
+                "f": function(seriesData, metrics) {
+                    var summedData = me._getSummedData(seriesData, "Planned", types);
+                    return me._getSlope(summedData);
+                }
+            },{
+                "as": "planned_intercept",
+                "f": function(seriesData, metrics) {
+                    var summedData = me._getSummedData(seriesData, "Planned", types);
+                    return me._getIntercept(summedData);
+                }
+            });
         }
 
-        return [{
-            "as": "planned_slope",
-            "f": function(seriesData, metrics) {
-              var summedData = me._getSummedData(seriesData, "Planned");
-              return me._getSlope(summedData);
-            }
-        },{
-            "as": "planned_intercept",
-            "f": function(seriesData, metrics) {
-                var summedData = me._getSummedData(seriesData, "Planned");
-                return me._getIntercept(summedData);
-            }
-        },{
-            "as": "accepted_slope",
-            "f": function(seriesData, metrics) {
-                var summedData = me._getSummedData(seriesData, completedScheduleStates);
-                return me._getSlope(summedData);
-            }
-        },{
-            "as": "accepted_intercept",
-            "f": function(seriesData, metrics) {
-                var summedData = me._getSummedData(seriesData, completedScheduleStates);
-                return me._getIntercept(summedData);
-            }
-        }];
+        if (this.showAcceptedPredictionLine){
+            summaryMetrics = summaryMetrics.concat({
+                "as": "accepted_slope",
+                "f": function(seriesData, metrics) {
+                    var summedData = me._getSummedData(seriesData, completedScheduleStates, types);
+                    return me._getSlope(summedData);
+                }
+            },{
+                "as": "accepted_intercept",
+                "f": function(seriesData, metrics) {
+                    var summedData = me._getSummedData(seriesData, completedScheduleStates, types);
+                    return me._getIntercept(summedData);
+                }
+            });
+        }
+        return summaryMetrics;
     },
     getDerivedFieldsAfterSummary: function () {
 
-        if (!this.showPredictionLines){
-            return [];
+        var metrics = [],
+            colors = this._getColors(this.completedScheduleStateNames);
+
+        if (this.showPlannedPredictionLine){
+           metrics.push({
+               "as": this.plannedPredictionLineName ,
+               "f": function(snapshot, index, metrics, seriesData) {
+                   return Math.round(metrics.planned_intercept + metrics.planned_slope * index);
+
+               },
+               "display": "line",
+               "dashStyle": "ShortDash",
+               "color": colors[this.plannedPredictionLineName]
+           });
         }
 
-        return [{
-                 "as": "Prediction (Planned Points)",
-                 "f": function(snapshot, index, metrics, seriesData) {
-                      return Math.round(metrics.planned_intercept + metrics.planned_slope * index);
-
-                  },
-                  "display": "line",
-                  "dashStyle": "ShortDash"
-             },{
-            "as": "Prediction (Accepted Points)",
-            "f": function(snapshot, index, metrics, seriesData) {
-                return Math.round(metrics.accepted_intercept + metrics.accepted_slope * index);
-
-            },
-            "display": "line",
-            "dashStyle": "ShortDash"
-        }];
+        if (this.showAcceptedPredictionLine){
+            metrics.push({
+                "as": this.acceptedPredictionLineName,
+                "f": function(snapshot, index, metrics, seriesData) {
+                    return Math.round(metrics.accepted_intercept + metrics.accepted_slope * index);
+                },
+                "display": "line",
+                "dashStyle": "ShortDash",
+                "color": colors[this.acceptedPredictionLineName]
+            });
+        }
+        return metrics;
     },
     prepareChartData: function (stores) {
         var snapshots = [], ids = [];
@@ -550,7 +587,8 @@ Ext.define("release-burnup", {
 
     config: {
         defaultSettings: {
-            showPredictionLines: false,
+            showPlannedPredictionLine: false,
+            showAcceptedPredictionLine: true,
             showDefects: true,
             showStories: true
         }
@@ -714,6 +752,35 @@ Ext.define("release-burnup", {
     _showError: function(msg){
         Rally.ui.notify.Notifier.showError({message: msg});
     },
+    _getChartColors: function(){
+        //In order to keep the colors consistent for the different options,
+        //we need to build the colors according to the settings
+        var chartColors = [],
+            numCompletedStates = this.completedStates.length;
+
+        if (this.getShowStories()){
+            chartColors.push('#8DC63F');
+        }
+        if (this.getShowDefects()){
+            chartColors.push('#FBB990');
+        }
+        if (numCompletedStates > 1){
+            if (this.getShowStories()){
+                chartColors.push('#1E7C00');
+            }
+            if (this.getShowDefects()){
+                chartColors.push('#FF8200');
+            }
+        }
+        chartColors.push('#7CAFD7');
+        if (this.getShowPlannedPredictionLine()){
+            chartColors.push('#666');
+        }
+        if (this.getShowAcceptedPredictionLine()){
+            chartColors.push('#005EB8');
+        }
+        return chartColors;
+    },
     _updateBurnup: function(){
         this.logger.log('_updateBurnup', this.getUnit());
 
@@ -726,7 +793,7 @@ Ext.define("release-burnup", {
 
         this.down('#displayBox').add({
             xtype: 'rallychart',
-            chartColors: ['#8DC63F','#1E7C00','#7CAFD7','#666','#005EB8'],
+            chartColors: this._getChartColors(),
             storeType: 'Rally.data.lookback.SnapshotStore',
             storeConfig: this._getStoreConfig(),
             calculatorType: 'Rally.technicalservices.ReleaseBurnupCalculator',
@@ -735,20 +802,29 @@ Ext.define("release-burnup", {
                 completedScheduleStateNames: this.completedStates,
                 startDate: this.getTimeboxStartDate(),
                 endDate: this.getTimeboxEndDate(),
-                showPredictionLines: this.getShowPredictionLines()
+                showPlannedPredictionLine: this.getShowPlannedPredictionLine(),
+                showAcceptedPredictionLine: this.getShowAcceptedPredictionLine(),
+                showDefects: this.getShowDefects(),
+                showStories: this.getShowStories()
                 //preliminaryEstimateValueHashByObjectID: this.preliminaryEstimateValueHashByObjectID
             },
             chartConfig: this._getChartConfig()
         });
     },
-    getShowPredictionLines: function(){
-        return this.getSetting('showPredictionLines') === 'true' || this.getSetting('showPredictionLines') === true;
+    getBooleanSetting: function(settingName){
+        return this.getSetting(settingName) === 'true' || this.getSetting(settingName) === true;
+    },
+    getShowPlannedPredictionLine: function(){
+        return this.getBooleanSetting('showPlannedPredictionLine');
+    },
+    getShowAcceptedPredictionLine: function(){
+        return this.getBooleanSetting('showAcceptedPredictionLine');
     },
     getShowDefects: function(){
-        return this.getSetting('showDefects') === 'true' || this.getSetting('showDefects') === true ;
+        return this.getBooleanSetting('showDefects');
     },
     getShowStories: function(){
-        var showStories = this.getSetting('showStories') === 'true' || this.getSetting('showStories') === true ;
+        var showStories = this.getBooleanSetting('showStories');
         if (!this.getShowDefects()){
             return true;
         }
@@ -778,8 +854,8 @@ Ext.define("release-burnup", {
                 Children: null,
                 Release: {$in: rOids} //We don't need project hierarchy here because the releases are associated with the current project hierarchy.
             },
-            fetch: ['ScheduleState', 'PlanEstimate','_id'],
-            hydrate: ['ScheduleState'],
+            fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy'],
+            hydrate: ['ScheduleState','_TypeHierarchy'],
             removeUnauthorizedSnapshots: true,
             sort: {
                 _ValidFrom: 1
@@ -796,8 +872,8 @@ Ext.define("release-burnup", {
                         _ItemHierarchy: {$in: piOids},
                         _ProjectHierarchy: projectOid // We need project hierarchy here to limit the stories and defects to just those in this project.
                 },
-                fetch: ['ScheduleState', 'PlanEstimate','_id'],
-                hydrate: ['ScheduleState'],
+                fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy'],
+                hydrate: ['ScheduleState','_TypeHierarchy'],
                 removeUnauthorizedSnapshots: true,
                 sort: {
                     _ValidFrom: 1
@@ -827,8 +903,6 @@ Ext.define("release-burnup", {
                 categories: [],
                 tickmarkPlacement: 'on',
                 tickInterval: 5,
-
-
                 title: {
                     text: 'Date',
                     margin: 10,
@@ -866,7 +940,8 @@ Ext.define("release-burnup", {
                             textTransform: 'uppercase',
                             fill:'#444'
                         }
-                    }
+                    },
+                    min: 0
                 }
             ],
             legend: {
@@ -919,10 +994,16 @@ Ext.define("release-burnup", {
 
         return [{
             xtype: 'rallycheckboxfield',
-            fieldLabel: 'Show Prediction Lines',
+            fieldLabel: 'Show Planned Prediction Line',
             labelAlign: 'right',
             labelWidth: labelWidth,
-            name: 'showPredictionLines'
+            name: 'showPlannedPredictionLine'
+        },{
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Show Accepted Prediction Line',
+            labelAlign: 'right',
+            labelWidth: labelWidth,
+            name: 'showAcceptedPredictionLine'
         },{
             xtype: 'rallycheckboxfield',
             fieldLabel: 'Show Defects',
