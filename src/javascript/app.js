@@ -69,6 +69,7 @@ Ext.define("release-burnup", {
                 xtype: this.timeboxTypePicker
             });
             rcb.on('select', this.updateTimebox, this);
+            rcb.on('ready', this.updateTimebox, this);
         }
         var cb = headerBox.add({
             xtype: 'tscustomcombobox',
@@ -76,7 +77,9 @@ Ext.define("release-burnup", {
             allowedValues: this.chartUnits
         });
         cb.on('select',this._updateBurnup, this);
-        this.updateTimebox();
+        if (this.isOnScopedDashboard()){
+            this.updateTimebox();
+        }
     },
     getUnit: function(){
         return this.down('#cbUnit') && this.down('#cbUnit').getValue() || this.chartUnits[0];
@@ -91,6 +94,7 @@ Ext.define("release-burnup", {
     },
     getTimeboxRecord: function(){
         var record = null;
+        this.logger.log('getTimeboxRecord', this.isOnScopedDashboard(), this.down(this.timeboxTypePicker) && this.down(this.timeboxTypePicker).getRecord())
         if (this.isOnScopedDashboard()){
             record = this.getContext().getTimeboxScope().getRecord();
         } else {
@@ -211,12 +215,12 @@ Ext.define("release-burnup", {
     _updateBurnup: function(){
         this.logger.log('_updateBurnup', this.getUnit());
 
+        this.down('#displayBox').removeAll();
+
         if (!this.timeboxes || this.timeboxes.length === 0){
             this._showMissingCriteria();
             return;
         }
-
-        this.down('#displayBox').removeAll();
 
         this.down('#displayBox').add({
             xtype: 'rallychart',
@@ -291,7 +295,11 @@ Ext.define("release-burnup", {
             limit: Infinity
         }];
 
+        piOids = piOids.slice(-10);
+        this.logger.log('PortfolioItems', piOids.length);
         if (piOids && piOids.length > 0){
+
+
             configs.push({
                 find: {
                         _TypeHierarchy: {$in: typeHierarchy},
@@ -301,11 +309,12 @@ Ext.define("release-burnup", {
                 },
                 fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy'],
                 hydrate: ['ScheduleState','_TypeHierarchy'],
+                compress: true,
                 removeUnauthorizedSnapshots: true,
                 sort: {
                     _ValidFrom: 1
                 },
-                context: this.getContext().getDataContext(),
+                //context: this.getContext().getDataContext(),
                 limit: Infinity
             });
         }

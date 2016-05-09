@@ -228,7 +228,7 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
     },
     prepareChartData: function (stores) {
         var snapshots = [], ids = [];
-
+        console.log('store', stores)
         Ext.Array.each(stores, function (store) {
             store.each(function(record){
                 var data = record.raw;
