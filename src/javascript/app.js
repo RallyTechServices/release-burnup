@@ -14,7 +14,8 @@ Ext.define("release-burnup", {
 
     config: {
         defaultSettings: {
-            showPredictionLines: false,
+            showPlannedPredictionLine: false,
+            showAcceptedPredictionLine: true,
             showDefects: true,
             showStories: true
         }
@@ -68,6 +69,7 @@ Ext.define("release-burnup", {
                 xtype: this.timeboxTypePicker
             });
             rcb.on('select', this.updateTimebox, this);
+            rcb.on('ready', this.updateTimebox, this);
         }
         var cb = headerBox.add({
             xtype: 'tscustomcombobox',
@@ -75,7 +77,9 @@ Ext.define("release-burnup", {
             allowedValues: this.chartUnits
         });
         cb.on('select',this._updateBurnup, this);
-        this.updateTimebox();
+        if (this.isOnScopedDashboard()){
+            this.updateTimebox();
+        }
     },
     getUnit: function(){
         return this.down('#cbUnit') && this.down('#cbUnit').getValue() || this.chartUnits[0];
@@ -90,6 +94,7 @@ Ext.define("release-burnup", {
     },
     getTimeboxRecord: function(){
         var record = null;
+        this.logger.log('getTimeboxRecord', this.isOnScopedDashboard(), this.down(this.timeboxTypePicker) && this.down(this.timeboxTypePicker).getRecord())
         if (this.isOnScopedDashboard()){
             record = this.getContext().getTimeboxScope().getRecord();
         } else {
@@ -178,19 +183,48 @@ Ext.define("release-burnup", {
     _showError: function(msg){
         Rally.ui.notify.Notifier.showError({message: msg});
     },
+    _getChartColors: function(){
+        //In order to keep the colors consistent for the different options,
+        //we need to build the colors according to the settings
+        var chartColors = [],
+            numCompletedStates = this.completedStates.length;
+
+        if (this.getShowStories()){
+            chartColors.push('#8DC63F');
+        }
+        if (this.getShowDefects()){
+            chartColors.push('#FBB990');
+        }
+        if (numCompletedStates > 1){
+            if (this.getShowStories()){
+                chartColors.push('#1E7C00');
+            }
+            if (this.getShowDefects()){
+                chartColors.push('#FF8200');
+            }
+        }
+        chartColors.push('#7CAFD7');
+        if (this.getShowPlannedPredictionLine()){
+            chartColors.push('#666');
+        }
+        if (this.getShowAcceptedPredictionLine()){
+            chartColors.push('#005EB8');
+        }
+        return chartColors;
+    },
     _updateBurnup: function(){
         this.logger.log('_updateBurnup', this.getUnit());
+
+        this.down('#displayBox').removeAll();
 
         if (!this.timeboxes || this.timeboxes.length === 0){
             this._showMissingCriteria();
             return;
         }
 
-        this.down('#displayBox').removeAll();
-
         this.down('#displayBox').add({
             xtype: 'rallychart',
-            chartColors: ['#8DC63F','#1E7C00','#7CAFD7','#666','#005EB8'],
+            chartColors: this._getChartColors(),
             storeType: 'Rally.data.lookback.SnapshotStore',
             storeConfig: this._getStoreConfig(),
             calculatorType: 'Rally.technicalservices.ReleaseBurnupCalculator',
@@ -199,20 +233,29 @@ Ext.define("release-burnup", {
                 completedScheduleStateNames: this.completedStates,
                 startDate: this.getTimeboxStartDate(),
                 endDate: this.getTimeboxEndDate(),
-                showPredictionLines: this.getShowPredictionLines()
+                showPlannedPredictionLine: this.getShowPlannedPredictionLine(),
+                showAcceptedPredictionLine: this.getShowAcceptedPredictionLine(),
+                showDefects: this.getShowDefects(),
+                showStories: this.getShowStories()
                 //preliminaryEstimateValueHashByObjectID: this.preliminaryEstimateValueHashByObjectID
             },
             chartConfig: this._getChartConfig()
         });
     },
-    getShowPredictionLines: function(){
-        return this.getSetting('showPredictionLines') === 'true' || this.getSetting('showPredictionLines') === true;
+    getBooleanSetting: function(settingName){
+        return this.getSetting(settingName) === 'true' || this.getSetting(settingName) === true;
+    },
+    getShowPlannedPredictionLine: function(){
+        return this.getBooleanSetting('showPlannedPredictionLine');
+    },
+    getShowAcceptedPredictionLine: function(){
+        return this.getBooleanSetting('showAcceptedPredictionLine');
     },
     getShowDefects: function(){
-        return this.getSetting('showDefects') === 'true' || this.getSetting('showDefects') === true ;
+        return this.getBooleanSetting('showDefects');
     },
     getShowStories: function(){
-        var showStories = this.getSetting('showStories') === 'true' || this.getSetting('showStories') === true ;
+        var showStories = this.getBooleanSetting('showStories');
         if (!this.getShowDefects()){
             return true;
         }
@@ -242,8 +285,8 @@ Ext.define("release-burnup", {
                 Children: null,
                 Release: {$in: rOids} //We don't need project hierarchy here because the releases are associated with the current project hierarchy.
             },
-            fetch: ['ScheduleState', 'PlanEstimate','_id'],
-            hydrate: ['ScheduleState'],
+            fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy'],
+            hydrate: ['ScheduleState','_TypeHierarchy'],
             removeUnauthorizedSnapshots: true,
             sort: {
                 _ValidFrom: 1
@@ -252,7 +295,11 @@ Ext.define("release-burnup", {
             limit: Infinity
         }];
 
+        piOids = piOids.slice(-10);
+        this.logger.log('PortfolioItems', piOids.length);
         if (piOids && piOids.length > 0){
+
+
             configs.push({
                 find: {
                         _TypeHierarchy: {$in: typeHierarchy},
@@ -260,13 +307,14 @@ Ext.define("release-burnup", {
                         _ItemHierarchy: {$in: piOids},
                         _ProjectHierarchy: projectOid // We need project hierarchy here to limit the stories and defects to just those in this project.
                 },
-                fetch: ['ScheduleState', 'PlanEstimate','_id'],
-                hydrate: ['ScheduleState'],
+                fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy'],
+                hydrate: ['ScheduleState','_TypeHierarchy'],
+                compress: true,
                 removeUnauthorizedSnapshots: true,
                 sort: {
                     _ValidFrom: 1
                 },
-                context: this.getContext().getDataContext(),
+                //context: this.getContext().getDataContext(),
                 limit: Infinity
             });
         }
@@ -291,8 +339,6 @@ Ext.define("release-burnup", {
                 categories: [],
                 tickmarkPlacement: 'on',
                 tickInterval: 5,
-
-
                 title: {
                     text: 'Date',
                     margin: 10,
@@ -330,7 +376,8 @@ Ext.define("release-burnup", {
                             textTransform: 'uppercase',
                             fill:'#444'
                         }
-                    }
+                    },
+                    min: 0
                 }
             ],
             legend: {
@@ -383,10 +430,16 @@ Ext.define("release-burnup", {
 
         return [{
             xtype: 'rallycheckboxfield',
-            fieldLabel: 'Show Prediction Lines',
+            fieldLabel: 'Show Planned Prediction Line',
             labelAlign: 'right',
             labelWidth: labelWidth,
-            name: 'showPredictionLines'
+            name: 'showPlannedPredictionLine'
+        },{
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Show Accepted Prediction Line',
+            labelAlign: 'right',
+            labelWidth: labelWidth,
+            name: 'showAcceptedPredictionLine'
         },{
             xtype: 'rallycheckboxfield',
             fieldLabel: 'Show Defects',
