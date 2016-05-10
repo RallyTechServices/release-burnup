@@ -3,12 +3,12 @@
 <head>
     <title>Release Burnup</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Tue May 10 2016 13:34:30 GMT-0600 (MDT) -->
+    <!--  Build Date: Tue May 10 2016 13:36:33 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Tue May 10 2016 13:34:30 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Tue May 10 2016 13:36:33 GMT-0600 (MDT)";
         var BUILDER = "kcorkan";
-        var CHECKSUM = 25549871575;
+        var CHECKSUM = 25549873328;
     </script>
     
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
