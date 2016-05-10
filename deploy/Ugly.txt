@@ -3,10 +3,10 @@
 <head>
     <title>Release Burnup</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Mon May 09 2016 17:17:36 GMT-0600 (MDT) -->
+    <!--  Build Date: Tue May 10 2016 13:34:30 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Mon May 09 2016 17:17:36 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Tue May 10 2016 13:34:30 GMT-0600 (MDT)";
         var CHECKSUM = [%= checksum %];
     </script>
     

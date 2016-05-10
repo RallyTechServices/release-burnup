@@ -3,12 +3,12 @@
 <head>
     <title>Release Burnup</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Mon May 09 2016 17:17:35 GMT-0600 (MDT) -->
+    <!--  Build Date: Tue May 10 2016 13:34:30 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Mon May 09 2016 17:17:35 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Tue May 10 2016 13:34:30 GMT-0600 (MDT)";
         var BUILDER = "kcorkan";
-        var CHECKSUM = 24360585514;
+        var CHECKSUM = 25549871575;
     </script>
     
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
@@ -297,48 +297,23 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
 
         return fields;
     },
-    _getColors: function(completedStateNames){
-        var colors = {};
-
-        colors["AcceptedHierarchicalRequirement"] = "#8DC63F";
-        colors["AcceptedDefect"] = "#FBB990";
-
-        if (completedStateNames.length > 1){
-            colors[completedStateNames[1]+"HierarchicalRequirement"] = "#1E7C00" ;
-            colors[completedStateNames[1]+"Defect"] = "#FF8200";
-        }
-
-        colors["Planned"] =  "#7CAFD7";
-        colors[this.plannedPredictionLineName] = "#666";
-        colors[this.acceptedPredictionLineName] = "#005EB8";
-
-        return colors;
-    },
     getMetrics: function() {
         var completedScheduleStateNames = this.getCompletedScheduleStateNames(),
             metrics = [],
-            typeHierarchy = this._getTypes(),
-            colors = this._getColors(completedScheduleStateNames);
+            typeHierarchy = this._getTypes();
 
         Ext.Array.each(completedScheduleStateNames, function(ss){
             Ext.Array.each(typeHierarchy, function(t){
-                var fieldDisplayName = Ext.String.format("{0} ({1})",ss,t.replace('HierarchicalRequirement','User Story'));
                 metrics.push({
-                    "field": ss + t,
-                    "as": fieldDisplayName,
-                    "f": "sum",
-                    "display": "column",
-                    "color": colors[ss+t]
+                    "field": ss+t,
+                    "f": "sum"
                 });
             });
         });
 
         metrics = metrics.concat([{
             "field": "Planned",
-            "as": "Planned",
-            "display": "line",
-            "f": "sum",
-            "color": colors.Planned
+            "f": "sum"
         }]);
 
         return metrics;
@@ -347,19 +322,28 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
         if (!Ext.isArray(metricNames)){
             metricNames = [metricNames];
         }
+        types = types || [];
+
         var sum_xy = 0;
         var sum_x = 0;
         var sum_y = 0;
         var sum_x_squared = 0;
         var n = 0;
+        var current_date = new Date();
+
         for (var i=0; i<seriesData.length; i++){
             var val = 0;
 
             Ext.Array.each(metricNames, function(m){
-                Ext.Array.each(types, function(t){
-                    var fieldDisplayName = Ext.String.format("{0} ({1})",m,t.replace('HierarchicalRequirement','User Story'));
-                    val += (seriesData[i][fieldDisplayName] || 0);
-                });
+                if (types.length > 0){
+                    Ext.Array.each(types, function(t){
+
+                        val += (seriesData[i][m + t + "_sum"] || 0);
+                    });
+                } else {
+                    val += (seriesData[i][m + "_sum"] || 0);
+                }
+
             });
 
             if (val){
@@ -368,6 +352,13 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
                 sum_y += val;
                 sum_x_squared += i * i;
                 n++;
+            }
+
+            if (i + 1 < seriesData.length){
+                var point_date = Rally.util.DateTime.fromIsoString(seriesData[i+1].tick);
+                if (point_date > current_date) {
+                    i = seriesData.length;
+                }
             }
         }
         return {
@@ -401,13 +392,13 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
             summaryMetrics = summaryMetrics.concat({
                 "as": "planned_slope",
                 "f": function(seriesData, metrics) {
-                    var summedData = me._getSummedData(seriesData, "Planned", types);
+                    var summedData = me._getSummedData(seriesData, "Planned");
                     return me._getSlope(summedData);
                 }
             },{
                 "as": "planned_intercept",
                 "f": function(seriesData, metrics) {
-                    var summedData = me._getSummedData(seriesData, "Planned", types);
+                    var summedData = me._getSummedData(seriesData, "Planned");
                     return me._getIntercept(summedData);
                 }
             });
@@ -433,19 +424,55 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
     getDerivedFieldsAfterSummary: function () {
 
         var metrics = [],
-            colors = this._getColors(this.completedScheduleStateNames);
+            completedScheduleStateNames = this.getCompletedScheduleStateNames(),
+            typeHierarchy = this._getTypes();
+
+        Ext.Array.each(completedScheduleStateNames, function(ss){
+            Ext.Array.each(typeHierarchy, function(t){
+                var fieldDisplayName = Ext.String.format("{0} ({1})",ss,t.replace('HierarchicalRequirement','User Story'));
+                metrics.push({
+                    "as": fieldDisplayName,
+                    "f": function(snapshot, index, metrics, seriesData){
+                        var point_date = Rally.util.DateTime.fromIsoString(snapshot.tick);
+                        if (point_date > new Date()){
+                            return null;
+                        }
+                        return snapshot[ss + t + "_sum"];
+                    },
+                    "display": "column"
+                });
+            });
+        });
 
         if (this.showPlannedPredictionLine){
+            metrics.push({
+                "as": "Planned",
+                "f": function(snapshot, index, metrics, seriesData){
+                    var point_date = Rally.util.DateTime.fromIsoString(snapshot.tick);
+                    if (point_date > new Date()){
+                        return null;
+                    }
+                    return snapshot.Planned_sum;
+                },
+                "display": "line"
+            });
+
            metrics.push({
                "as": this.plannedPredictionLineName ,
                "f": function(snapshot, index, metrics, seriesData) {
                    return Math.round(metrics.planned_intercept + metrics.planned_slope * index);
-
                },
                "display": "line",
-               "dashStyle": "ShortDash",
-               "color": colors[this.plannedPredictionLineName]
+               "dashStyle": "ShortDash"
            });
+        } else {
+            metrics.push({
+                "as": "Planned",
+                "f": function(snapshot, index, metrics, seriesData){
+                    return snapshot.Planned_sum;
+                },
+                "display": "line"
+            });
         }
 
         if (this.showAcceptedPredictionLine){
@@ -455,15 +482,14 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
                     return Math.round(metrics.accepted_intercept + metrics.accepted_slope * index);
                 },
                 "display": "line",
-                "dashStyle": "ShortDash",
-                "color": colors[this.acceptedPredictionLineName]
+                "dashStyle": "ShortDash"
             });
         }
         return metrics;
     },
     prepareChartData: function (stores) {
         var snapshots = [], ids = [];
-        console.log('store', stores)
+
         Ext.Array.each(stores, function (store) {
             store.each(function(record){
                 var data = record.raw;
@@ -476,7 +502,23 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
                 }
             });
         });
+
         return this.runCalculation(snapshots);
+    },
+    _buildSeriesConfig: function (calculatorConfig) {
+        var aggregationConfig = [],
+            derivedFieldsAfterSummary = calculatorConfig.deriveFieldsAfterSummary;
+
+        for (var j = 0, jlength = derivedFieldsAfterSummary.length; j < jlength; j += 1) {
+            var derivedField = derivedFieldsAfterSummary[j];
+            aggregationConfig.push({
+                name: derivedField.as,
+                type: derivedField.display,
+                dashStyle: derivedField.dashStyle || "Solid"
+            });
+        }
+
+        return aggregationConfig;
     }
 });
 
