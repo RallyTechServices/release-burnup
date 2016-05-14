@@ -89,3 +89,10 @@ Ext.define('Rally.technicalservices.Toolbox',{
         });
     }
 });
+
+Ext.override(Rally.sdk.Bootstrapper,{
+    _isExternal: function() {
+        return this.app.isExternal();
+        //return !!Rally.environment.externalContext;
+    }
+});

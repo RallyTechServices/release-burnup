@@ -43,6 +43,8 @@ Ext.define("release-burnup", {
             scope: this
         });
 
+
+
     },
     _initializeApp: function(results){
         this.portfolioItemTypes = _.map(results[0], function(r){ return r.get('TypePath'); });
@@ -321,6 +323,7 @@ Ext.define("release-burnup", {
         return configs;
     },
     _getChartConfig: function(){
+        var numTicks = 6;
         return {
             chart: {
                 defaultSeriesType: 'area',
@@ -338,7 +341,6 @@ Ext.define("release-burnup", {
             xAxis: {
                 categories: [],
                 tickmarkPlacement: 'on',
-                tickInterval: 5,
                 title: {
                     text: 'Date',
                     margin: 10,
@@ -355,7 +357,23 @@ Ext.define("release-burnup", {
                         fontFamily:'ProximaNova',
                         textTransform: 'uppercase',
                         fill:'#444'
+                    },
+                    formatter: function(){
+                        var d = new Date(this.value);
+                        return Rally.util.DateTime.format(d, 'm/d/Y');
                     }
+                },
+                tickPositioner: function () {
+                    var positions = [],
+                        tick = Math.floor(this.dataMin),
+                        increment = Math.ceil((this.dataMax - this.dataMin) / numTicks);
+
+                    if (this.dataMax !== null && this.dataMin !== null) {
+                        for (tick; tick - increment <= this.dataMax; tick += increment) {
+                            positions.push(tick);
+                        }
+                    }
+                    return positions;
                 }
             },
             yAxis: [
