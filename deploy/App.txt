@@ -3,12 +3,12 @@
 <head>
     <title>Release Burnup</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Tue May 10 2016 13:36:33 GMT-0600 (MDT) -->
+    <!--  Build Date: Sat May 14 2016 10:16:08 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Tue May 10 2016 13:36:33 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Sat May 14 2016 10:16:08 GMT-0600 (MDT)";
         var BUILDER = "kcorkan";
-        var CHECKSUM = 25549873328;
+        var CHECKSUM = 26656156587;
     </script>
     
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
@@ -613,6 +613,13 @@ Ext.define('Rally.technicalservices.Toolbox',{
         });
     }
 });
+
+Ext.override(Rally.sdk.Bootstrapper,{
+    _isExternal: function() {
+        return this.app.isExternal();
+        //return !!Rally.environment.externalContext;
+    }
+});
 Ext.define("release-burnup", {
     extend: 'Rally.app.App',
     componentCls: 'app',
@@ -657,6 +664,8 @@ Ext.define("release-burnup", {
             failure: this._showError,
             scope: this
         });
+
+
 
     },
     _initializeApp: function(results){
@@ -936,6 +945,7 @@ Ext.define("release-burnup", {
         return configs;
     },
     _getChartConfig: function(){
+        var numTicks = 6;
         return {
             chart: {
                 defaultSeriesType: 'area',
@@ -953,7 +963,6 @@ Ext.define("release-burnup", {
             xAxis: {
                 categories: [],
                 tickmarkPlacement: 'on',
-                tickInterval: 5,
                 title: {
                     text: 'Date',
                     margin: 10,
@@ -970,7 +979,23 @@ Ext.define("release-burnup", {
                         fontFamily:'ProximaNova',
                         textTransform: 'uppercase',
                         fill:'#444'
+                    },
+                    formatter: function(){
+                        var d = new Date(this.value);
+                        return Rally.util.DateTime.format(d, 'm/d/Y');
                     }
+                },
+                tickPositioner: function () {
+                    var positions = [],
+                        tick = Math.floor(this.dataMin),
+                        increment = Math.ceil((this.dataMax - this.dataMin) / numTicks);
+
+                    if (this.dataMax !== null && this.dataMin !== null) {
+                        for (tick; tick - increment <= this.dataMax; tick += increment) {
+                            positions.push(tick);
+                        }
+                    }
+                    return positions;
                 }
             },
             yAxis: [
