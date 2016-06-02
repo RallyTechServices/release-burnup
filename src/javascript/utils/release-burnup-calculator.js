@@ -192,6 +192,9 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
             completedScheduleStateNames = this.getCompletedScheduleStateNames(),
             typeHierarchy = this._getTypes();
 
+        var now = new Date(),
+            endOfDayToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23,59,59,999);
+
         Ext.Array.each(completedScheduleStateNames, function(ss){
             Ext.Array.each(typeHierarchy, function(t){
                 var fieldDisplayName = Ext.String.format("{0} ({1})",ss,t.replace('HierarchicalRequirement','User Story'));
@@ -199,7 +202,8 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
                     "as": fieldDisplayName,
                     "f": function(snapshot, index, metrics, seriesData){
                         var point_date = Rally.util.DateTime.fromIsoString(snapshot.tick);
-                        if (point_date > new Date()){
+                       // console.log('point_date', point_date, endOfDayToday)
+                        if (point_date > endOfDayToday){
                             return null;
                         }
                         return snapshot[ss + t + "_sum"];
