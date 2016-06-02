@@ -215,7 +215,7 @@ Ext.define("release-burnup", {
         return chartColors;
     },
     _updateBurnup: function(){
-        this.logger.log('_updateBurnup', this.getUnit());
+        this.logger.log('_updateBurnup', this.getUnit(), this.getTimeboxEndDate());
 
         this.down('#displayBox').removeAll();
 
