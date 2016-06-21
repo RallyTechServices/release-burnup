@@ -11,6 +11,17 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
         this.initConfig(config);
         this.callParent(arguments);
     },
+    runCalculation: function (snapshots) {
+        var calculatorConfig = this._prepareCalculatorConfig(),
+            seriesConfig = this._buildSeriesConfig(calculatorConfig);
+
+        var calculator = this.prepareCalculator(calculatorConfig);
+        calculator.addSnapshots(snapshots, this._getStartDate(snapshots), this._getEndDate(snapshots));
+
+        this.snapshots = snapshots;
+
+        return this._transformLumenizeDataToHighchartsSeries(calculator, seriesConfig);
+    },
     _getTypes: function(){
         var typeHierarchy = [];
         if (this.showStories){
@@ -254,6 +265,7 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
                 "dashStyle": "ShortDash"
             });
         }
+
         return metrics;
     },
     prepareChartData: function (stores) {
@@ -271,7 +283,6 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
                 }
             });
         });
-
         return this.runCalculation(snapshots);
     },
     _buildSeriesConfig: function (calculatorConfig) {

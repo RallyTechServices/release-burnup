@@ -82,6 +82,50 @@ Ext.define("release-burnup", {
         if (this.isOnScopedDashboard()){
             this.updateTimebox();
         }
+        var btn = headerBox.add({
+            xtype: 'rallybutton',
+            iconCls: 'icon-export secondary rly-small',
+            margin: '0 0 0 25'
+        });
+        btn.on('click', this._export, this);
+
+        headerBox.add({
+            xtype: 'container',
+            itemId: 'etlDate',
+            padding: 10,
+            tpl: '<tpl><div class="etlDate">Data current as of {etlDate}</div></tpl>'
+        });
+    },
+    _export: function(){
+        var chart = this.down('rallychart'),
+            snapshots = chart && chart.calculator && chart.calculator.snapshots,
+            chartEndDate = chart.calculator.endDate,
+            chartStartDate = chart.calculator.startDate;
+        this.logger.log('_Export', chart.calculator ,chartStartDate, chartEndDate);
+        if (snapshots){
+            var csv = [];
+            var headers = ['FormattedID','PlanEstimate','ScheduleState','_ValidFrom','_ValidTo'];
+            csv.push(headers.join(','));
+            Ext.Array.each(snapshots, function(s){
+                var validFrom = Rally.util.DateTime.fromIsoString(s._ValidFrom),
+                    validTo = Rally.util.DateTime.fromIsoString(s._ValidTo);
+
+                if (validFrom < chartEndDate && validTo >= chartStartDate){
+                    var row = [s.FormattedID, s.PlanEstimate, s.ScheduleState, s._ValidFrom, s._ValidTo];
+                    csv.push(row.join(','));
+                }
+            });
+            csv = csv.join("\r\n");
+
+            CArABU.technicalservices.Exporter.saveCSVToFile(csv, Ext.String.format('export-{0}.csv', Rally.util.DateTime.format(new Date(), 'Y-m-d')));
+        }
+    },
+    _updateETLDate: function(store, records, success){
+        this.logger.log('_updateETLDate', store, records, success);
+        var etlDate = store && store.proxy && store.proxy._etlDate;
+        if (etlDate){
+            this.down('#etlDate').update({etlDate: Rally.util.DateTime.fromIsoString(etlDate)});
+        }
     },
     getUnit: function(){
         return this.down('#cbUnit') && this.down('#cbUnit').getValue() || this.chartUnits[0];
@@ -287,14 +331,18 @@ Ext.define("release-burnup", {
                 Children: null,
                 Release: {$in: rOids} //We don't need project hierarchy here because the releases are associated with the current project hierarchy.
             },
-            fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy'],
+            fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy','FormattedID'],
             hydrate: ['ScheduleState','_TypeHierarchy'],
             removeUnauthorizedSnapshots: true,
             sort: {
                 _ValidFrom: 1
             },
             context: this.getContext().getDataContext(),
-            limit: Infinity
+            limit: Infinity,
+            listeners: {
+                load: this._updateETLDate,
+                scope: this
+            }
         }];
 
         piOids = piOids.slice(-10);
@@ -309,7 +357,7 @@ Ext.define("release-burnup", {
                         _ItemHierarchy: {$in: piOids},
                         _ProjectHierarchy: projectOid // We need project hierarchy here to limit the stories and defects to just those in this project.
                 },
-                fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy'],
+                fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy','FormattedID'],
                 hydrate: ['ScheduleState','_TypeHierarchy'],
                 compress: true,
                 removeUnauthorizedSnapshots: true,
@@ -317,7 +365,11 @@ Ext.define("release-burnup", {
                     _ValidFrom: 1
                 },
                 //context: this.getContext().getDataContext(),
-                limit: Infinity
+                limit: Infinity,
+                listeners: {
+                    load: this._updateETLDate,
+                    scope: this
+                }
             });
         }
         return configs;
