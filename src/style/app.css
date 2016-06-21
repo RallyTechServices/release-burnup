@@ -29,3 +29,8 @@
     font-size:13px;
     color:white;
 }
+.etlDate {
+    color: grey;
+    font-family:NotoSans;
+    font-style: italic;
+}

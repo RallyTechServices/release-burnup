@@ -3,12 +3,12 @@
 <head>
     <title>Release Burnup</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Thu Jun 02 2016 16:07:02 GMT-0600 (MDT) -->
+    <!--  Build Date: Mon Jun 20 2016 18:24:23 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Thu Jun 02 2016 16:07:02 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Mon Jun 20 2016 18:24:23 GMT-0600 (MDT)";
         var BUILDER = "kcorkan";
-        var CHECKSUM = 27055752753;
+        var CHECKSUM = 36473317926;
     </script>
     
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
@@ -233,6 +233,90 @@ Ext.define('Rally.technicalservices.CustomStoreDropdown',{
     }
 });
 
+Ext.define('CArABU.technicalservices.Exporter',{
+    singleton: true,
+    saveCSVToFile:function(csv,file_name,type_object){
+        if (type_object === undefined){
+            type_object = {type:'text/csv;charset=utf-8'};
+        }
+        this.saveAs(csv,file_name, type_object);
+    },
+    saveAs: function(textToWrite, fileName)
+    {
+        if (Ext.isIE9m){
+            Rally.ui.notify.Notifier.showWarning({message: "Export is not supported for IE9 and below."});
+            return;
+        }
+
+        var textFileAsBlob = null;
+        try {
+            textFileAsBlob = new Blob([textToWrite], {type:'text/plain'});
+        }
+        catch(e){
+            window.BlobBuilder = window.BlobBuilder ||
+                window.WebKitBlobBuilder ||
+                window.MozBlobBuilder ||
+                window.MSBlobBuilder;
+            if (window.BlobBuilder && e.name === 'TypeError'){
+                bb = new BlobBuilder();
+                bb.append([textToWrite]);
+                textFileAsBlob = bb.getBlob("text/plain");
+            }
+
+        }
+
+        if (!textFileAsBlob){
+            Rally.ui.notify.Notifier.showWarning({message: "Export is not supported for this browser."});
+            return;
+        }
+
+        var fileNameToSaveAs = fileName;
+
+        if (Ext.isIE10p){
+            window.navigator.msSaveOrOpenBlob(textFileAsBlob,fileNameToSaveAs); // Now the user will have the option of clicking the Save button and the Open button.
+            return;
+        }
+
+        var url = this.createObjectURL(textFileAsBlob);
+
+        if (url){
+            var downloadLink = document.createElement("a");
+            if ("download" in downloadLink){
+                downloadLink.download = fileNameToSaveAs;
+            } else {
+                //Open the file in a new tab
+                downloadLink.target = "_blank";
+            }
+
+            downloadLink.innerHTML = "Download File";
+            downloadLink.href = url;
+            if (!Ext.isChrome){
+                // Firefox requires the link to be added to the DOM
+                // before it can be clicked.
+                downloadLink.onclick = this.destroyClickedElement;
+                downloadLink.style.display = "none";
+                document.body.appendChild(downloadLink);
+            }
+            downloadLink.click();
+        } else {
+            Rally.ui.notify.Notifier.showError({message: "Export is not supported "});
+        }
+
+    },
+    createObjectURL: function ( file ) {
+        if ( window.webkitURL ) {
+            return window.webkitURL.createObjectURL( file );
+        } else if ( window.URL && window.URL.createObjectURL ) {
+            return window.URL.createObjectURL( file );
+        } else {
+            return null;
+        }
+    },
+    destroyClickedElement: function(event)
+    {
+        document.body.removeChild(event.target);
+    }
+});
 Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
     extend: 'Rally.data.lookback.calculator.TimeSeriesCalculator',
     config: {
@@ -245,6 +329,17 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
     constructor: function(config) {
         this.initConfig(config);
         this.callParent(arguments);
+    },
+    runCalculation: function (snapshots) {
+        var calculatorConfig = this._prepareCalculatorConfig(),
+            seriesConfig = this._buildSeriesConfig(calculatorConfig);
+
+        var calculator = this.prepareCalculator(calculatorConfig);
+        calculator.addSnapshots(snapshots, this._getStartDate(snapshots), this._getEndDate(snapshots));
+
+        this.snapshots = snapshots;
+
+        return this._transformLumenizeDataToHighchartsSeries(calculator, seriesConfig);
     },
     _getTypes: function(){
         var typeHierarchy = [];
@@ -489,6 +584,7 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
                 "dashStyle": "ShortDash"
             });
         }
+
         return metrics;
     },
     prepareChartData: function (stores) {
@@ -506,7 +602,6 @@ Ext.define('Rally.technicalservices.ReleaseBurnupCalculator',{
                 }
             });
         });
-
         return this.runCalculation(snapshots);
     },
     _buildSeriesConfig: function (calculatorConfig) {
@@ -707,6 +802,50 @@ Ext.define("release-burnup", {
         cb.on('select',this._updateBurnup, this);
         if (this.isOnScopedDashboard()){
             this.updateTimebox();
+        }
+        var btn = headerBox.add({
+            xtype: 'rallybutton',
+            iconCls: 'icon-export secondary rly-small',
+            margin: '0 0 0 25'
+        });
+        btn.on('click', this._export, this);
+
+        headerBox.add({
+            xtype: 'container',
+            itemId: 'etlDate',
+            padding: 10,
+            tpl: '<tpl><div class="etlDate">Data current as of {etlDate}</div></tpl>'
+        });
+    },
+    _export: function(){
+        var chart = this.down('rallychart'),
+            snapshots = chart && chart.calculator && chart.calculator.snapshots,
+            chartEndDate = chart.calculator.endDate,
+            chartStartDate = chart.calculator.startDate;
+        this.logger.log('_Export', chart.calculator ,chartStartDate, chartEndDate);
+        if (snapshots){
+            var csv = [];
+            var headers = ['FormattedID','PlanEstimate','ScheduleState','_ValidFrom','_ValidTo'];
+            csv.push(headers.join(','));
+            Ext.Array.each(snapshots, function(s){
+                var validFrom = Rally.util.DateTime.fromIsoString(s._ValidFrom),
+                    validTo = Rally.util.DateTime.fromIsoString(s._ValidTo);
+
+                if (validFrom < chartEndDate && validTo >= chartStartDate){
+                    var row = [s.FormattedID, s.PlanEstimate, s.ScheduleState, s._ValidFrom, s._ValidTo];
+                    csv.push(row.join(','));
+                }
+            });
+            csv = csv.join("\r\n");
+
+            CArABU.technicalservices.Exporter.saveCSVToFile(csv, Ext.String.format('export-{0}.csv', Rally.util.DateTime.format(new Date(), 'Y-m-d')));
+        }
+    },
+    _updateETLDate: function(store, records, success){
+        this.logger.log('_updateETLDate', store, records, success);
+        var etlDate = store && store.proxy && store.proxy._etlDate;
+        if (etlDate){
+            this.down('#etlDate').update({etlDate: Rally.util.DateTime.fromIsoString(etlDate)});
         }
     },
     getUnit: function(){
@@ -913,14 +1052,18 @@ Ext.define("release-burnup", {
                 Children: null,
                 Release: {$in: rOids} //We don't need project hierarchy here because the releases are associated with the current project hierarchy.
             },
-            fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy'],
+            fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy','FormattedID'],
             hydrate: ['ScheduleState','_TypeHierarchy'],
             removeUnauthorizedSnapshots: true,
             sort: {
                 _ValidFrom: 1
             },
             context: this.getContext().getDataContext(),
-            limit: Infinity
+            limit: Infinity,
+            listeners: {
+                load: this._updateETLDate,
+                scope: this
+            }
         }];
 
         piOids = piOids.slice(-10);
@@ -935,7 +1078,7 @@ Ext.define("release-burnup", {
                         _ItemHierarchy: {$in: piOids},
                         _ProjectHierarchy: projectOid // We need project hierarchy here to limit the stories and defects to just those in this project.
                 },
-                fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy'],
+                fetch: ['ScheduleState', 'PlanEstimate','_id','_TypeHierarchy','FormattedID'],
                 hydrate: ['ScheduleState','_TypeHierarchy'],
                 compress: true,
                 removeUnauthorizedSnapshots: true,
@@ -943,7 +1086,11 @@ Ext.define("release-burnup", {
                     _ValidFrom: 1
                 },
                 //context: this.getContext().getDataContext(),
-                limit: Infinity
+                limit: Infinity,
+                listeners: {
+                    load: this._updateETLDate,
+                    scope: this
+                }
             });
         }
         return configs;
@@ -1154,6 +1301,11 @@ Ext.define("release-burnup", {
     white-space:nowrap;
     font-size:13px;
     color:white;
+}
+.etlDate {
+    color: grey;
+    font-family:NotoSans;
+    font-style: italic;
 }
     </style>
 

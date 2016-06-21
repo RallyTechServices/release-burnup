@@ -3,10 +3,10 @@
 <head>
     <title>Release Burnup</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Thu Jun 02 2016 16:07:02 GMT-0600 (MDT) -->
+    <!--  Build Date: Mon Jun 20 2016 18:24:24 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Thu Jun 02 2016 16:07:02 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Mon Jun 20 2016 18:24:24 GMT-0600 (MDT)";
         var CHECKSUM = [%= checksum %];
     </script>
     
@@ -54,6 +54,11 @@
     white-space:nowrap;
     font-size:13px;
     color:white;
+}
+.etlDate {
+    color: grey;
+    font-family:NotoSans;
+    font-style: italic;
 }
     </style>
 
