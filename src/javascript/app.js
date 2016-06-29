@@ -17,7 +17,8 @@ Ext.define("release-burnup", {
             showPlannedPredictionLine: false,
             showAcceptedPredictionLine: true,
             showDefects: true,
-            showStories: true
+            showStories: true,
+            showExportButton: false
         }
     },
 
@@ -82,12 +83,15 @@ Ext.define("release-burnup", {
         if (this.isOnScopedDashboard()){
             this.updateTimebox();
         }
-        var btn = headerBox.add({
-            xtype: 'rallybutton',
-            iconCls: 'icon-export secondary rly-small',
-            margin: '0 0 0 25'
-        });
-        btn.on('click', this._export, this);
+
+        if (this.getShowExport()){
+            var btn = headerBox.add({
+                xtype: 'rallybutton',
+                iconCls: 'icon-export secondary rly-small',
+                margin: '0 0 0 25'
+            });
+            btn.on('click', this._export, this);
+        }
 
         headerBox.add({
             xtype: 'container',
@@ -300,6 +304,9 @@ Ext.define("release-burnup", {
     getShowDefects: function(){
         return this.getBooleanSetting('showDefects');
     },
+    getShowExport: function(){
+        return this.getBooleanSetting('showExportButton');
+    },
     getShowStories: function(){
         var showStories = this.getBooleanSetting('showStories');
         if (!this.getShowDefects()){
@@ -313,7 +320,7 @@ Ext.define("release-burnup", {
         var rOids = this._getFieldValueArray(this.timeboxes,'ObjectID'),
             piOids = this._getFieldValueArray(this.portfolioItems,'ObjectID'),
             projectOid = this.getContext().getProject().ObjectID;
-
+        this.logger.log('_getStoreConfig', this.portfolioItems);
         var typeHierarchy = [];
         if (this.getShowStories()){
             typeHierarchy.push('HierarchicalRequirement');
@@ -522,6 +529,13 @@ Ext.define("release-burnup", {
             labelAlign: 'right',
             labelWidth: labelWidth,
             name: 'showStories'
+        },{
+            xtype: 'rallycheckboxfield',
+            fieldLabel: 'Show Export Button',
+            labelAlign: 'right',
+            labelWidth: labelWidth,
+            name: 'showExportButton'
+
         }];
     },
     _launchInfo: function() {
